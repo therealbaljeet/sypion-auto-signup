@@ -1,8 +1,0 @@
-{
-    "chromedriver" : "C:\\PATH\\TO\\chromedriver.exe",
-    "profile" : "C:\\PATH\\TO\\Google\\Chrome\\User Data\\Default",
-    "catchall-domain" : "domain.com",
-    "delay" : 15,
-    "swap-headers" : true,
-    "proxy" : false
-}
