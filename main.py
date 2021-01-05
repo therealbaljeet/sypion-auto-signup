@@ -1,84 +1,130 @@
-global browser, PATH, PROFILE, DOMAIN, DELAY, HEADERS, PROXY
-browser = "None"
-PATH = None
-PROFILE = None
-DOMAIN = None
-DELAY = None
-HEADERS = None
-PROXY = None
+import names
+import time
+import datetime
+import json
+from random import randint
+from fake_useragent import UserAgent
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.keys import Keys
+
+#Inits or Validates log.json
+def getLog():
+    try:
+
+        with open('log.json', 'r') as f:
+            return True
+
+    except Exception:
+
+        with open('log.json', 'a') as f:
+            data = {}
+            json.dump(data, f)
+
+        return True
+
+#Getting caps set up
+getLog()
+
+with open('log.json', 'r') as f:
+    data = json.loads(f.read())
 
 try:
-    import setup
-    import json
-    import names
-    import time
-    from random import randint
-    from fake_useragent import UserAgent
-    from selenium import webdriver
-    from selenium.common.exceptions import NoSuchElementException
-    from selenium.common.exceptions import InvalidSelectorException
-    from selenium.webdriver.chrome.options import Options
-    from selenium.webdriver.common.keys import Keys
+    CATCHALL = data['settings']['catchall']
+    PATH = data['settings']['path']
 
 except Exception:
-    print("Invalid Formatting, Quitting...")
-    quit()
+    CATCHALL = input("Enter your catchall domain name: ")
+    PATH = input("Enter your Chromedriver Path: ")
 
-if setup.config() == False:
-    print("Quitting...")
-    quit()
+    data['settings'] = {'catchall' : CATCHALL, 'path' : PATH}
 
-def browser():
+    with open('log.json', 'w') as f:
+        json.dump(data, f)      
+
+#Returns a configed browser w/ custom agent
+def driver():
+
+    #Setting options
     options = Options()
-    options.add_argument("--headless")
-    if PROFILE:
-        dirPath = "user-data-dir=" + PROFILE
-        options.add_argument(dirPath)
+    #options.add_argument("--headless")
+
+    #Generating + adding random user agent
     ua = UserAgent()
     user_agent = ua.random 
     options.add_argument(f'user-agent={user_agent}')
+
     options.add_argument("start-maximized")
     options.add_argument('--log-level=3')
-    options.add_experimental_option("detach", True)
-    options.add_argument("--app=https://www.google.com")
+    options.add_argument("--window-size=450,650")
+    options.add_argument("--app=https://sypion.com/#signup")
     options.add_experimental_option('excludeSwitches', ['enable-logging'])
     prefs = {"profile.managed_default_content_settings.images": 2}
     options.add_experimental_option("prefs", prefs)
-    browser = webdriver.Chrome(PATH, chrome_options = options)
+
+    browser = webdriver.Chrome(PATH, options = options)
+
     return browser
 
-def settings():
-    with open('config.json', 'r') as f:
-        data = json.loads(f.read())
+#Returns randomized delay
+def delay():
+    return randint(1,50)/randint(50,100)
+
+#Main process
+def start():
     
-    PATH = data['chromedriver']
-    
-    try:
-        PROFILE = data['profile']
-    except Exception:
-        pass
+    if getLog(): #makes sure logfile exists
 
-    DOMAIN = data['catchall-domain']
-    DELAY = data['delay']
-    HEADERS = data['swap-headers']
-    PROXY = data['proxy']
+        while True: 
 
-def main():
-    settings()
-    while True:
-        driver = browser()
-        driver.get('https://sypion.com/#signup')
-        email = driver.find_element_by_xpath('//*[@id="MERGE0"]')
-        email.click()
-        name = names.get_full_name().split(' ')
-        number = randint(1990,2021)
-        address = f"{name[1]}.{name[0]}{number}@{DOMAIN}"
-        email.send_keys(address)
-        submit = driver.find_element_by_xpath('//*[@id="signup"]/div[1]/div/div/div/div/form/button')
-        submit.click()
-        while driver.current_url != "https://sypion.us20.list-manage.com/subscribe/post":
-            pass
-        time.sleep(DELAY)
-        driver.quit()
+            browser = driver() #Gets browser object
 
-main()
+            try:
+                time.sleep(delay())
+
+                email = browser.find_element_by_id('MERGE0')
+                email.click()
+
+                time.sleep(delay())
+
+                #Generating unique email address
+                name = names.get_full_name().split(' ')
+                number = randint(1990,2021)
+                address = f'{name[1]}.{name[0]}{number}@{CATCHALL}'.lower()
+
+                #Entering + submitting address
+                email.send_keys(address)
+
+                time.sleep(delay())
+
+                submit = browser.find_element_by_xpath('//*[@id="signup"]/div[1]/div/div/div/div/form/button')
+                submit.click()
+
+                time.sleep(delay())
+
+                #Waiting for redirect to clear
+                while browser.current_url != 'https://sypion.us20.list-manage.com/subscribe/post':
+                    pass
+                
+                #Getting information for log file + writing to log file
+                user_agent = browser.execute_script("return navigator.userAgent;")
+
+                with open('log.json') as f:
+                    data = json.loads(f.read())
+                
+                data[str(address)] = {
+                    'agent' : user_agent,
+                    'status' : 200,
+                    'timestamp' : str(datetime.datetime.now())
+                }
+
+                with open('log.json', 'w') as f:
+                    json.dump(data, f)
+            except Exception as E:
+                time.sleep(delay())
+
+            #terminating browser
+            browser.quit()
+
+#Starting program
+start()
